@@ -10,3 +10,6 @@ requests
 fpdf2
 pandas
 geopy
+fastapi
+uvicorn
+pydantic
