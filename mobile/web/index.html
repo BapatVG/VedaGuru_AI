@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="vedaguru_mobile">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>vedaguru_mobile</title>
+  <link rel="manifest" href="manifest.json">
+  <script>
+    window.vedaguruVoice = {
+      recognition: null,
+      isListening: false,
+      startListening: async function(lang, onResult, onStatus, onError) {
+        try {
+          this.stopListening();
+
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (!SpeechRecognition) {
+            if (onError) onError("Speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or a Chromium browser.");
+            return;
+          }
+
+          // Request microphone permission if supported
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              // Stop tracks immediately so SpeechRecognition can take over the mic exclusively
+              stream.getTracks().forEach(track => track.stop());
+            } catch (permErr) {
+              console.warn("[VedaGuru Voice] Mic permission error:", permErr);
+              if (onError) onError("Microphone access denied. Please click the lock/camera icon in your browser address bar to allow microphone access.");
+              if (onStatus) onStatus(false);
+              return;
+            }
+          }
+
+          const rec = new SpeechRecognition();
+          this.recognition = rec;
+          rec.continuous = true;
+          rec.interimResults = true;
+          rec.lang = lang || 'en-IN';
+
+          rec.onstart = function() {
+            window.vedaguruVoice.isListening = true;
+            if (onStatus) onStatus(true);
+            console.log("[VedaGuru Voice] Listening started with language:", rec.lang);
+          };
+
+          rec.onresult = function(event) {
+            try {
+              let finalStr = '';
+              let interimStr = '';
+              for (let i = 0; i < event.results.length; ++i) {
+                const res = event.results[i];
+                if (res.isFinal) {
+                  finalStr += res[0].transcript;
+                } else {
+                  interimStr += res[0].transcript;
+                }
+              }
+              const output = (finalStr + ' ' + interimStr).trim();
+              if (output && onResult) {
+                console.log("[VedaGuru Voice] Recognized:", output);
+                onResult(output, !!finalStr);
+              }
+            } catch (err) {
+              console.error("[VedaGuru Voice] Parse error:", err);
+            }
+          };
+
+          rec.onerror = function(event) {
+            console.warn("[VedaGuru Voice] Error event:", event.error);
+            if (event.error === 'no-speech') {
+              return; // Ignore silence
+            }
+            window.vedaguruVoice.isListening = false;
+            if (onStatus) onStatus(false);
+            if (onError) {
+              let msg = "Microphone error: " + event.error;
+              if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                msg = "Microphone access blocked. Please allow microphone permission in your browser address bar.";
+              } else if (event.error === 'audio-capture') {
+                msg = "No microphone hardware found. Please verify your microphone is plugged in.";
+              } else if (event.error === 'network') {
+                msg = "Speech recognition network timeout. Please verify internet connection.";
+              }
+              onError(msg);
+            }
+          };
+
+          rec.onend = function() {
+            window.vedaguruVoice.isListening = false;
+            if (onStatus) onStatus(false);
+            console.log("[VedaGuru Voice] Listening stopped.");
+          };
+
+          rec.start();
+        } catch (e) {
+          console.error("[VedaGuru Voice] Start failed:", e);
+          window.vedaguruVoice.isListening = false;
+          if (onStatus) onStatus(false);
+          if (onError) onError(e.message || String(e));
+        }
+      },
+
+      stopListening: function() {
+        if (this.recognition) {
+          try {
+            this.recognition.stop();
+          } catch (_) {}
+          this.recognition = null;
+        }
+        this.isListening = false;
+      },
+
+      speak: function(text, lang, onStart, onEnd, onError) {
+        try {
+          this.stopSpeaking();
+          if (!window.speechSynthesis) {
+            if (onError) onError("Speech synthesis not supported.");
+            return;
+          }
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.lang = lang || 'en-IN';
+          utter.rate = 0.95;
+          utter.pitch = 1.0;
+
+          utter.onstart = function() {
+            if (onStart) onStart();
+          };
+          utter.onend = function() {
+            if (onEnd) onEnd();
+          };
+          utter.onerror = function() {
+            if (onEnd) onEnd();
+          };
+          window.speechSynthesis.speak(utter);
+        } catch (e) {
+          if (onError) onError(e.message || String(e));
+        }
+      },
+
+      stopSpeaking: function() {
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+        }
+      }
+    };
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
